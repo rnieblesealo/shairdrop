@@ -13,6 +13,11 @@
  *    - Width * height * channel count
  * - And how big the packet is
  *    - 1 + 1 + 1 + (width * height * channel count)
+ * - After further thinking, an opcode header makes a lot of sense as well
+ *  - We might get a packet and a size but we have no fucking idea what the packet is meant for... How do we know what to do with it?
+ *  - Do this later
+ *  - I am hungry
+ *  - :D
  *
  * Pipeline:
  *
