@@ -1,0 +1,109 @@
+# --- Build outputs (generic) ---
+/build/
+/bin/
+/obj/
+/out/
+/dist/
+/. cache/
+/.cache/
+
+# --- C/C++ compilation artifacts ---
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exp
+*.ilk
+*.pdb
+*.exe
+
+# Dependency/metadata files
+*.d
+*.tds
+*.pch
+*.gch
+*.ipch
+
+# --- Debug / crash / profiling ---
+core
+vgcore.*
+*.stackdump
+*.dSYM/
+perf.data*
+callgrind.out.*
+
+# --- Coverage ---
+*.gcno
+*.gcda
+*.gcov
+lcov.info
+
+# --- Raylib / vendor builds (if raylib is vendored) ---
+/raylib/build/
+/third_party/**/build/
+/external/**/build/
+
+# --- CMake ---
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+cmake-build-*/
+
+# --- Make / Ninja ---
+*.ninja
+.ninja_deps
+.ninja_log
+
+# --- Meson ---
+/meson-logs/
+/meson-info/
+/subprojects/**/packagecache/
+/_subprojects/
+/*.wrap
+
+# --- Package managers (optional, if used) ---
+# Conan
+/conan.lock
+/conanbuild/
+/conan-downloads/
+/.conan/
+# vcpkg
+/vcpkg_installed/
+/vcpkg*.log
+
+# --- IDE / Editor (optional) ---
+# VS Code
+.vscode/
+# CLion / IntelliJ
+.idea/
+# Visual Studio (CMake or MSBuild out-of-tree)
+/Debug/
+/Release/
+/x64/
+/x86/
+/[Ww][Ii][Nn]32/
+# Xcode
+*.xcworkspace/
+*.xcuserdatad/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+._*
+
+# --- Logs / temp ---
+*.log
+*.tmp
+*.temp
+~*
