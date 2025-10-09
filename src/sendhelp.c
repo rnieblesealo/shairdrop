@@ -3,12 +3,14 @@
 #include <errno.h>
 #include <stdio.h>
 
-bool SendAll(int fd, void *buf, size_t len) {
+bool SendAll(int fd, void *buf, size_t len)
+{
   const uint8_t *startByte =
       (const uint8_t *)buf; // Start byte in buffer should never change
   size_t bytesSent = 0;
 
-  while (bytesSent < len) {
+  while (bytesSent < len)
+  {
 
     /*
      * Compute start byte of remaining send
@@ -18,7 +20,8 @@ bool SendAll(int fd, void *buf, size_t len) {
 
     ssize_t n = send(fd, startByte + bytesSent, len - bytesSent, 0);
 
-    if (n == -1) {
+    if (n == -1)
+    {
 
       /*
        * We only retry on EINTR, why?
@@ -31,7 +34,8 @@ bool SendAll(int fd, void *buf, size_t len) {
        *
        */
 
-      if (errno == EINTR) {
+      if (errno == EINTR)
+      {
         continue;
       }
 
@@ -41,26 +45,33 @@ bool SendAll(int fd, void *buf, size_t len) {
     bytesSent += (ssize_t)n;
   }
 
+  printf("Sent %zu bytes, OK\n ", bytesSent);
+
   return true;
 }
 
-bool ReceiveAll(int fd, void *buf, size_t len) {
-  uint8_t *startByte = (uint8_t *)buf;
-  size_t bytesReceived = 0;
+bool ReceiveAll(int fd, void *buf, size_t len)
+{
+  uint8_t *startByte     = (uint8_t *)buf;
+  size_t   bytesReceived = 0;
 
-  while (bytesReceived < len) {
+  while (bytesReceived < len)
+  {
     ssize_t n = recv(fd, startByte + bytesReceived, len - bytesReceived, 0);
 
     // If we get 0 bytes, the peer is likely closed; nothing we can do from this
     // end
-    if (n == 0) {
+    if (n == 0)
+    {
       return false;
     }
 
-    if (n < 0) {
+    if (n < 0)
+    {
       perror("server: recvall");
 
-      if (errno == EINTR) {
+      if (errno == EINTR)
+      {
         continue;
       }
 
@@ -70,5 +81,7 @@ bool ReceiveAll(int fd, void *buf, size_t len) {
     bytesReceived += (size_t)n;
   }
 
-  return (ssize_t)bytesReceived;
+  printf("Received %zu bytes, OK\n ", bytesReceived);
+
+  return true;
 }

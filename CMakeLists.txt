@@ -9,18 +9,17 @@ set(CMAKE_BUILD_TYPE Debug)
 
 find_package(raylib REQUIRED)
 
-add_executable(${PROJECT_NAME} 
-  src/main.c
-  src/sendhelp.c
+add_executable(shairc 
+  src/client.c
 )
 
 if(APPLE)
-    target_link_libraries(${PROJECT_NAME} raylib "-framework CoreVideo" "-framework IOKit" "-framework Cocoa" "-framework GLUT" "-framework OpenGL")
+    target_link_libraries(shairc raylib "-framework CoreVideo" "-framework IOKit" "-framework Cocoa" "-framework GLUT" "-framework OpenGL")
 else()
-    target_link_libraries(${PROJECT_NAME} raylib)
+    target_link_libraries(shairc raylib)
 endif()
 
-target_include_directories(shairdrop PRIVATE 
+target_include_directories(shairc PRIVATE 
   include
 )
 
