@@ -11,6 +11,7 @@ find_package(raylib REQUIRED)
 
 add_executable(${PROJECT_NAME} 
   src/main.c
+  src/sendhelp.c
 )
 
 if(APPLE)
