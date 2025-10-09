@@ -1,5 +1,3 @@
-// The client ASSEMBLES THE PACKET and SENDS IT OVER
-
 #include "raylib.h"
 #include "sendhelp.c"
 #include "sendhelp.h"
@@ -16,49 +14,40 @@
 #define RGBA_CHANNEL_COUNT 4
 #define MAX_IMG_SIZE (MAX_IMG_WIDTH * MAX_IMG_HEIGHT * RGBA_CHANNEL_COUNT)
 
+enum OPCODES : uint8_t
+{
+  OPC_RECEIVE_IMG = 1
+};
+
+/**
+ * @brief Builds a packet out of the data in a raylib image
+ * @param image The image to build packet from
+ * @returns Pointer to the packet
+ */
 uint8_t *AssembleImagePacket(Image *image)
 {
   /*
-   * Avatar Packet:
-   *
-   * - Width - 1 byte; 8 bits (max. 2^8 - 1 size; 255); boundscheck this!
-   * - Height - 1 byte as well
-   * - Channel count - 1 byte, can only be 1 (grayscale), 3 (RGB), or 4 (RGBA)
-   *    - We will convert all lower chan. counts into RGBA!
-   * - Pixel data itself
-   *    - Will need to manip. this for the above effect
-   * - Also very important is the size
-   *    - Width * height * channel count
-   * - And how big the packet is
-   *    - 1 + 1 + 1 + (width * height * channel count)
-   *    - Put this at beginning to tell receiver size
+   * ┌──────────────────────────────┐
+   * │ OPCODE (1 byte)              │
+   * ├──────────────────────────────┤
+   * │ RECV PACKET SIZE (8 bytes)   │
+   * ├──────────────────────────────┤
+   * │ IMG WIDTH (1 byte)           │
+   * ├──────────────────────────────┤
+   * │ IMG HEIGHT (1 byte)          │
+   * ├──────────────────────────────┤
+   * │ IMG CHANNEL COUNT (1 byte)   │
+   * ├──────────────────────────────┤
+   * │ IMG DATA (w * h * ch bytes)  │
+   * └──────────────────────────────┘
    */
 
-  // Determine packet size
-
-  size_t imgSize         = image->width * image->height * RGBA_CHANNEL_COUNT;
-  size_t totalPacketSize = 1 * sizeof(size_t) + 3 * sizeof(uint8_t) + imgSize;
-
-  // Make packet object
-
-  uint8_t *imgPacket = (uint8_t *)malloc(totalPacketSize);
-  memset((void *)imgPacket, 0, sizeof imgPacket);
-
-  // Copy packet size
-
-  size_t recvPacketSize = totalPacketSize - sizeof(size_t);
-  memcpy(&imgPacket[0], &recvPacketSize, sizeof recvPacketSize);
-
-  size_t offset = recvPacketSize;
-
-  // Copy remaining members
-
-  imgPacket[offset + 1] = (uint8_t)image->width;
-  imgPacket[offset + 2] = (uint8_t)image->height;
-  imgPacket[offset + 3] = (uint8_t)RGBA_CHANNEL_COUNT;
-
-  // Try to copy image data
-  // WARNING: Off by 1 could happen here?
+  uint8_t opcode         = OPC_RECEIVE_IMG;
+  size_t  recvPacketSize = -1; // We don't know this yet
+  uint8_t w              = image->width;
+  uint8_t h              = image->height;
+  uint8_t ch             = RGBA_CHANNEL_COUNT;
+  size_t  imgSize        = w * h * ch;
 
   if (imgSize > MAX_IMG_SIZE)
   {
@@ -66,13 +55,43 @@ uint8_t *AssembleImagePacket(Image *image)
     return NULL;
   }
 
-  memcpy(&imgPacket[offset + 4], image->data, imgSize);
+  size_t totalPacketSize =
+      sizeof opcode + sizeof recvPacketSize + sizeof w + sizeof h + sizeof ch + imgSize;
 
-  return imgPacket;
+  uint8_t *packet = (uint8_t *)malloc(totalPacketSize);
+  memset((void *)packet, 0, sizeof packet); // Ensure packet memory is clean!
+
+  // recv will yank opcode and total size, then recvall everything else
+  recvPacketSize = totalPacketSize - sizeof opcode - sizeof recvPacketSize;
+
+  // Build out the packet
+  size_t offset = 0;
+
+  packet[offset] = htons(opcode);
+  offset += sizeof opcode;
+
+  size_t nRecvPacketSize = htons(recvPacketSize);
+
+  memcpy(&packet[offset + 1], &nRecvPacketSize, sizeof nRecvPacketSize);
+  offset += sizeof recvPacketSize;
+
+  packet[offset + 1] = htons(w);
+  offset += sizeof w;
+
+  packet[offset + 1] = htons(h);
+  offset += sizeof h;
+
+  packet[offset + 1] = htons(ch);
+  offset += sizeof ch;
+
+  // TODO: Why don't we need to htons the image data itself?
+  memcpy(&packet[offset], image->data, imgSize);
+
+  return packet;
 }
 
-bool SendImagePacket(const uint8_t *imgPacket,
-                     size_t         imgPacketLen,
+bool SendImagePacket(const uint8_t *packet,
+                     size_t         packetLen,
                      const char    *host,
                      const char    *port)
 {
@@ -132,7 +151,7 @@ bool SendImagePacket(const uint8_t *imgPacket,
   freeaddrinfo(res);
 
   // Now that we're connected, send the image; return the status of this
-  return SendAll(sockfd, (void *)imgPacket, imgPacketLen);
+  return SendAll(sockfd, (void *)packet, packetLen);
 }
 
 int main(int argc, char *argv[])
@@ -155,10 +174,10 @@ int main(int argc, char *argv[])
   ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
 
   // Make packet
-  uint8_t *imgPacket = AssembleImagePacket(&img);
+  uint8_t *packet = AssembleImagePacket(&img);
 
   // Send it
-  if (SendImagePacket(imgPacket, sizeof imgPacket, host, port))
+  if (SendImagePacket(packet, sizeof packet, host, port))
   {
     puts("Sent OK");
   }
@@ -167,7 +186,7 @@ int main(int argc, char *argv[])
     puts("Send FAIL");
   }
 
-  free(imgPacket);
+  free(packet);
 
   exit(EXIT_SUCCESS);
 }
