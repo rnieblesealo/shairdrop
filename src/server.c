@@ -11,7 +11,7 @@
 #define SCREEN_HEIGHT 500
 #define NUM_THREADS 1
 
-// === Shared State (Will make you cry) ============================
+// === Shared State (Will make you cry) (Update: It didn't because I'm him >:D) ===
 
 Image           xImg            = {0};
 Texture2D       xImgTexture     = {0};
@@ -19,7 +19,7 @@ bool            xImgInited      = false;
 bool            xTextureUpdated = false;
 pthread_mutex_t xImgLock        = PTHREAD_MUTEX_INITIALIZER;
 
-// =================================================================
+// ================================================================================
 
 typedef struct NetArgs
 {
