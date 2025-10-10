@@ -9,22 +9,29 @@
 
 #define SCREEN_WIDTH 500
 #define SCREEN_HEIGHT 500
-#define NUM_THREADS 1
 
-// === Shared State (Will make you cry) (Update: It didn't because I'm him >:D) ===
+// ========================================================================
+// Shared State (Will make you cry) (Update: It didn't because I'm him >:D)
+// ========================================================================
 
-Image           xImg            = {0};
-Texture2D       xImgTexture     = {0};
-bool            xImgInited      = false;
-bool            xTextureUpdated = false;
-pthread_mutex_t xImgLock        = PTHREAD_MUTEX_INITIALIZER;
+Image           xImg        = {0};
+Texture2D       xImgTexture = {0};
+bool            xImgInited  = false;
+bool            xTexDirty   = false;
+pthread_mutex_t xImgLock    = PTHREAD_MUTEX_INITIALIZER;
 
-// ================================================================================
+// ========================================================================
+// Structures
+// ========================================================================
 
 typedef struct NetArgs
 {
   int servsockfd;
 } NetArgs;
+
+// ========================================================================
+// Function Definitions
+// ========================================================================
 
 void *NetworkThread(void *arg)
 {
@@ -43,6 +50,7 @@ void *NetworkThread(void *arg)
   }
 
   xImgInited = true;
+  xTexDirty  = true;
 
   puts("Image load OK!\n");
 
@@ -50,6 +58,10 @@ void *NetworkThread(void *arg)
 
   return NULL;
 }
+
+// ========================================================================
+// MAIN
+// ========================================================================
 
 int main(int argc, char *argv[])
 {
@@ -68,17 +80,20 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
 
+  // ====================================================================================
+  // Initialization
+  // ====================================================================================
+
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "SHAirDrop");
   SetTargetFPS(60);
 
   const char *host = argv[1];
   const char *port = argv[2];
 
-  // Start server
   int sockfd = FireUpTheServer(host, port);
 
   // ====================================================================================
-  // Network Thread
+  // Network Thread Start
   // ====================================================================================
 
   pthread_t networkThread;
@@ -91,7 +106,7 @@ int main(int argc, char *argv[])
   }
 
   // ====================================================================================
-  // Render Thread
+  // Render Thread Start
   // ====================================================================================
 
   while (!WindowShouldClose())
@@ -107,10 +122,10 @@ int main(int argc, char *argv[])
     {
       pthread_mutex_lock(&xImgLock);
 
-      if (!xTextureUpdated)
+      if (xTexDirty)
       {
-        xImgTexture     = LoadTextureFromImage(xImg);
-        xTextureUpdated = true;
+        xImgTexture = LoadTextureFromImage(xImg);
+        xTexDirty   = false;
       }
 
       Vector2 drawPos = {
@@ -125,7 +140,9 @@ int main(int argc, char *argv[])
     EndDrawing();
   }
 
-  // Dealloc stuff
+  // ====================================================================================
+  // Deinitialization
+  // ====================================================================================
 
   pthread_mutex_lock(&xImgLock);
 
