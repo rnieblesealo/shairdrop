@@ -1,3 +1,4 @@
+#include "raylib.h"
 #include "sendhelp.h"
 #include <netdb.h>
 #include <stdint.h>
@@ -18,21 +19,14 @@ enum OPCODES : uint8_t
   OPC_RECEIVE_IMG = 1
 };
 
-int main(int argc, char *argv[])
+/**
+ * @brief Starts a listener server
+ * @param host The server's hostname
+ * @param port The server's port
+ * @returns The listener file descriptor if OK, or -1 on error
+ */
+int FireUpTheServer(const char *host, const char *port)
 {
-  // Fire up tha server
-  // Yuh
-  // ...Help me
-
-  if (argc < 3)
-  {
-    fputs("usage: ./shairs <host> <port>", stderr);
-    exit(EXIT_FAILURE);
-  }
-
-  const char *host = argv[1];
-  const char *port = argv[2];
-
   // Resolve host
   struct addrinfo hints;
 
@@ -46,7 +40,7 @@ int main(int argc, char *argv[])
   if ((rc = getaddrinfo(host, port, &hints, &res)) != 0)
   {
     fprintf(stderr, "client: getaddrinfo: %s\n", gai_strerror(rc));
-    exit(EXIT_FAILURE);
+    return -1;
   }
 
   // Bind to first available
@@ -70,7 +64,7 @@ int main(int argc, char *argv[])
 
       freeaddrinfo(res);
 
-      exit(EXIT_FAILURE);
+      return -1;
     }
 
     // Bind
@@ -95,6 +89,18 @@ int main(int argc, char *argv[])
 
   freeaddrinfo(res);
 
+  return sockfd;
+}
+
+/**
+ * @brief Accepts a connection on the given listener file descriptor
+ * @param sockfd The listener file descriptor
+ * @returns The accepted connection's file descriptor, or -1 on error
+ */
+int HearOutAMothafucka(int sockfd)
+{
+  // WARNING: We don't do anything with their_addr stuff... Remove?
+
   struct sockaddr their_addr;
   socklen_t       their_addrlen = sizeof their_addr;
 
@@ -103,58 +109,147 @@ int main(int argc, char *argv[])
   if ((clientsockfd = accept(sockfd, &their_addr, &their_addrlen)) == -1)
   {
     perror("server: accept");
-    exit(EXIT_FAILURE);
+    return -1;
   }
 
-  // Receive the packet
-  // First, receive opcode byte to grab the packet size
+  return clientsockfd;
+}
 
+/**
+ * @brief Receives an image packet, writing it into a Raylib image if successful
+ * @param clientsockfd fd of the client we would like to receive image from
+ * @returns true if the operation succeeded, false otherwise
+ */
+bool GetHisFuckingPicture(Image *img, int clientsockfd)
+{
   uint8_t opcode;
   if (!ReceiveAll(clientsockfd, &opcode, sizeof opcode))
   {
-    fputs("server: failed to receive opcode", stderr);
+    fputs("server: failed to receive opcode\n", stderr);
+    return false;
   }
 
   printf("server: got opcode %u\n", opcode);
 
-  // NOTE: For now there's just one opcode
-  switch (opcode)
+  if (opcode != OPC_RECEIVE_IMG)
   {
-  case OPC_RECEIVE_IMG:
-  {
-    // Get packet size
-    uint16_t packetSize;
-    if (!ReceiveAll(clientsockfd, &packetSize, sizeof packetSize))
-    {
-      fputs("server: failed to receive packet size", stderr);
-      exit(EXIT_FAILURE);
-    }
-
-    packetSize = ntohs(packetSize);
-
-    printf("server: got packet size %u\n", packetSize);
-
-    // Get the packet itself
-    uint8_t *recvdPacket = (uint8_t *)malloc(packetSize);
-
-    if (!ReceiveAll(clientsockfd, recvdPacket, packetSize))
-    {
-      fputs("server: failed to receive packet", stderr);
-      exit(EXIT_FAILURE);
-    }
-
-    printf("server: got full packet of size %u", packetSize);
-
-    // TODO: Resume here; decode packet
-
-    free(recvdPacket);
-
-    break;
-  }
-  default:
     fprintf(stderr, "server: bad opcode (%d)", opcode);
+    return false;
+  }
+
+  uint16_t packetSize;
+  if (!ReceiveAll(clientsockfd, &packetSize, sizeof packetSize))
+  {
+    fputs("server: failed to receive packet size\n", stderr);
+    return false;
+  }
+
+  packetSize = ntohs(packetSize);
+
+  printf("server: got packet size %u\n", packetSize);
+
+  // Get the packet itself
+
+  uint8_t *recvdPacket = (uint8_t *)malloc(packetSize);
+
+  if (!ReceiveAll(clientsockfd, recvdPacket, packetSize))
+  {
+    fputs("server: failed to receive packet", stderr);
     exit(EXIT_FAILURE);
   }
 
-  exit(EXIT_SUCCESS);
+  printf("server: got full packet of size %u\n", packetSize);
+
+  // Get image attributes
+
+  size_t offset = 0;
+
+  uint8_t w = recvdPacket[offset];
+  offset += sizeof w;
+
+  uint8_t h = recvdPacket[offset];
+  offset += sizeof h;
+
+  uint8_t ch = recvdPacket[offset];
+  offset += sizeof ch;
+
+  size_t imgSize = w * h * ch;
+
+  printf("server: got image of size %u * %u * %u = %zu\n", w, h, ch, imgSize);
+
+  // Get image data and write it back
+
+  memset(img, 0, sizeof(Image));
+
+  img->width   = w;
+  img->height  = h;
+  img->mipmaps = 1;
+  img->format  = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+
+  img->data = malloc(imgSize);
+  memcpy(img->data, &recvdPacket[offset], imgSize);
+
+  free(recvdPacket);
+
+  return true;
+}
+
+int main(int argc, char *argv[])
+{
+  /*
+   * 1. Start raylib, server, listening
+   * 2. Wait for a connection (blocking!)
+   * 3. If connection OK, receive image packet (blocking!)
+   * 4. If receive OK, begin draw loop
+   * 5. Draw image from received packet
+   * 6. Exit on normal window close
+   */
+
+  if (argc < 3)
+  {
+    fputs("usage: ./shairs <host> <port>\n", stderr);
+    exit(EXIT_FAILURE);
+  }
+
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "SHAirDrop");
+  SetTargetFPS(60);
+
+  const char *host = argv[1];
+  const char *port = argv[2];
+
+  int sockfd       = FireUpTheServer(host, port);
+  int clientsockfd = HearOutAMothafucka(sockfd);
+
+  Image img;
+  if (!GetHisFuckingPicture(&img, clientsockfd))
+  {
+    fputs("server: unable to get picture\n", stderr);
+    exit(EXIT_FAILURE);
+  }
+
+  Texture2D imgTex = LoadTextureFromImage(img);
+
+  puts("Image load OK!\n");
+
+  while (!WindowShouldClose())
+  {
+    BeginDrawing();
+
+    ClearBackground(BLUE);
+
+    float   drawScale = 10;
+    float   drawRot   = 0;
+    Vector2 drawPos = {.x = (float)SCREEN_WIDTH / 2 - (float)imgTex.width * drawScale / 2,
+                       .y = (float)SCREEN_HEIGHT / 2 -
+                            (float)imgTex.height * drawScale / 2};
+
+    DrawTextureEx(imgTex, drawPos, drawRot, drawScale, WHITE);
+
+    EndDrawing();
+  }
+
+  UnloadTexture(imgTex);
+  UnloadImage(img);
+
+  CloseWindow();
 }

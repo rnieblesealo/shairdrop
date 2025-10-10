@@ -42,6 +42,11 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
 - Using TCP INET4 for simplicity
 - sendall, recvall to ensure shit makes it across
 - No network thread yet; will add tho
+- `htonl/ntohl` = `uint32_t` (4 byte)
+- `htons/ntohs` = `uint16_t` (32 byte)
+    - Since `uint8_t` is a single byte endianness (byte order) doesn't apply
+    - Other types of int are simply not supported :(
+- Using any graphics functions in Raylib requires `InitWindow()` because this fires up the OGL context
 
 ### Code Style
 
