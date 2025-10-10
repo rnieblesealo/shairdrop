@@ -25,6 +25,7 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
  - Do this later
  - I am hungry
  - :D
+> Side note: Can't we just pack a struct, reinterpreting it as a bunch of bytes? Why not do this? This seems really a lot easier...
 
 ### Pipeline
 

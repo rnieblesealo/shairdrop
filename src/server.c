@@ -13,6 +13,11 @@
 #define RGBA_CHANNEL_COUNT 4
 #define MAX_IMG_SIZE (MAX_IMG_WIDTH * MAX_IMG_HEIGHT * RGBA_CHANNEL_COUNT)
 
+enum OPCODES : uint8_t
+{
+  OPC_RECEIVE_IMG = 1
+};
+
 int main(int argc, char *argv[])
 {
   // Fire up tha server
@@ -102,16 +107,54 @@ int main(int argc, char *argv[])
   }
 
   // Receive the packet
-  // First, receive sizeof(size_t) to grab the packet size
-  size_t packetSize;
-  if (!ReceiveAll(clientsockfd, &packetSize, sizeof packetSize))
+  // First, receive opcode byte to grab the packet size
+
+  uint8_t opcode;
+  if (!ReceiveAll(clientsockfd, &opcode, sizeof opcode))
   {
-    fputs("server: failed to receive packet size", stderr);
-    exit(EXIT_FAILURE);
+    fputs("server: failed to receive opcode", stderr);
   }
 
-  // Show size
-  printf("server: got packet size %zu\n", packetSize);
+  printf("server: got opcode %u\n", opcode);
+
+  // NOTE: For now there's just one opcode
+  switch (opcode)
+  {
+  case OPC_RECEIVE_IMG:
+  {
+    // Get packet size
+    uint16_t packetSize;
+    if (!ReceiveAll(clientsockfd, &packetSize, sizeof packetSize))
+    {
+      fputs("server: failed to receive packet size", stderr);
+      exit(EXIT_FAILURE);
+    }
+
+    packetSize = ntohs(packetSize);
+
+    printf("server: got packet size %u\n", packetSize);
+
+    // Get the packet itself
+    uint8_t *recvdPacket = (uint8_t *)malloc(packetSize);
+
+    if (!ReceiveAll(clientsockfd, recvdPacket, packetSize))
+    {
+      fputs("server: failed to receive packet", stderr);
+      exit(EXIT_FAILURE);
+    }
+
+    printf("server: got full packet of size %u", packetSize);
+
+    // TODO: Resume here; decode packet
+
+    free(recvdPacket);
+
+    break;
+  }
+  default:
+    fprintf(stderr, "server: bad opcode (%d)", opcode);
+    exit(EXIT_FAILURE);
+  }
 
   exit(EXIT_SUCCESS);
 }

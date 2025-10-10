@@ -24,7 +24,7 @@ enum OPCODES : uint8_t
  * @param image The image to build packet from
  * @returns Pointer to the packet
  */
-uint8_t *AssembleImagePacket(Image *image)
+bool AssembleImagePacket(Image *image, uint8_t **packetBuf, size_t *packetLen)
 {
   /*
    * ┌──────────────────────────────┐
@@ -42,52 +42,57 @@ uint8_t *AssembleImagePacket(Image *image)
    * └──────────────────────────────┘
    */
 
-  uint8_t opcode         = OPC_RECEIVE_IMG;
-  size_t  recvPacketSize = -1; // We don't know this yet
-  uint8_t w              = image->width;
-  uint8_t h              = image->height;
-  uint8_t ch             = RGBA_CHANNEL_COUNT;
-  size_t  imgSize        = w * h * ch;
+  uint8_t  opcode         = OPC_RECEIVE_IMG;
+  uint16_t recvPacketSize = 0; // We don't know this yet
+  uint8_t  w              = image->width;
+  uint8_t  h              = image->height;
+  uint8_t  ch             = RGBA_CHANNEL_COUNT;
+  size_t   imgSize        = w * h * ch;
 
   if (imgSize > MAX_IMG_SIZE)
   {
     fputs("client: image too large\n", stderr);
-    return NULL;
+    return false;
   }
 
   size_t totalPacketSize =
       sizeof opcode + sizeof recvPacketSize + sizeof w + sizeof h + sizeof ch + imgSize;
 
-  uint8_t *packet = (uint8_t *)malloc(totalPacketSize);
-  memset((void *)packet, 0, sizeof packet); // Ensure packet memory is clean!
-
-  // recv will yank opcode and total size, then recvall everything else
   recvPacketSize = totalPacketSize - sizeof opcode - sizeof recvPacketSize;
 
+  *packetBuf   = (uint8_t *)malloc(totalPacketSize);
+  uint8_t *buf = *packetBuf; // Alias for easier legibility
+
   // Build out the packet
+
+  memset(buf, 0, totalPacketSize); // Ensure packet memory is clean!
+
   size_t offset = 0;
 
-  packet[offset] = htons(opcode);
+  buf[offset] = opcode;
   offset += sizeof opcode;
 
-  size_t nRecvPacketSize = htons(recvPacketSize);
+  uint16_t nRecvPacketSize = htons(recvPacketSize);
 
-  memcpy(&packet[offset + 1], &nRecvPacketSize, sizeof nRecvPacketSize);
+  memcpy(&buf[offset], &nRecvPacketSize, sizeof nRecvPacketSize);
   offset += sizeof recvPacketSize;
 
-  packet[offset + 1] = htons(w);
+  buf[offset] = w;
   offset += sizeof w;
 
-  packet[offset + 1] = htons(h);
+  buf[offset] = h;
   offset += sizeof h;
 
-  packet[offset + 1] = htons(ch);
+  buf[offset] = ch;
   offset += sizeof ch;
 
   // TODO: Why don't we need to htons the image data itself?
-  memcpy(&packet[offset], image->data, imgSize);
+  memcpy(&buf[offset], image->data, imgSize);
 
-  return packet;
+  // Update size
+  *packetLen = totalPacketSize;
+
+  return true;
 }
 
 bool SendImagePacket(const uint8_t *packet,
@@ -150,6 +155,8 @@ bool SendImagePacket(const uint8_t *packet,
 
   freeaddrinfo(res);
 
+  size_t opc = packet[0];
+
   // Now that we're connected, send the image; return the status of this
   return SendAll(sockfd, (void *)packet, packetLen);
 }
@@ -174,10 +181,16 @@ int main(int argc, char *argv[])
   ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
 
   // Make packet
-  uint8_t *packet = AssembleImagePacket(&img);
+  uint8_t *packetBuf;
+  size_t   packetLen;
+  if (!AssembleImagePacket(&img, &packetBuf, &packetLen))
+  {
+    puts("client: failed to make packet");
+    exit(EXIT_FAILURE);
+  }
 
   // Send it
-  if (SendImagePacket(packet, sizeof packet, host, port))
+  if (SendImagePacket(packetBuf, packetLen, host, port))
   {
     puts("Sent OK");
   }
@@ -186,7 +199,7 @@ int main(int argc, char *argv[])
     puts("Send FAIL");
   }
 
-  free(packet);
+  free(packetBuf);
 
   exit(EXIT_SUCCESS);
 }
