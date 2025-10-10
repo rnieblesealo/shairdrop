@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include "sendhelp.h"
 #include "shairdrop.h"
 #include <netdb.h>
 #include <pthread.h>
@@ -38,25 +39,56 @@ void *NetworkThread(void *arg)
   NetArgs *args = (NetArgs *)arg;
 
   int clientsockfd = HearOutAMothafucka(args->servsockfd);
+  int connected    = true;
 
-  pthread_mutex_lock(&xImgLock);
-
-  if (!GetHisFuckingPicture(&xImg, clientsockfd))
+  while (connected)
   {
-    fputs("server: unable to get picture\n", stderr);
+
+    puts("server: waiting for new picture...\n");
+
+    // Get the opcode
+    // If it pertains to image reception, then do that
+
+    uint8_t opcode;
+    if (!ReceiveAll(clientsockfd, &opcode, sizeof opcode))
+    {
+      fputs("server: net thread recv fail; stopping\n", stderr);
+
+      pthread_exit(NULL);
+    }
+
+    printf("server: got opcode %u\n", opcode);
+
+    if (opcode != OPC_RECEIVE_IMG)
+    {
+      fprintf(stderr, "server: bad opcode (%d)", opcode);
+
+      continue;
+    }
+
+    pthread_mutex_lock(&xImgLock);
+
+    if (!DecodeImagePacket(&xImg, clientsockfd))
+    {
+      fputs("server: unable to get picture\n", stderr);
+
+      pthread_mutex_unlock(&xImgLock);
+      pthread_exit(NULL);
+    }
+
+    if (!xImgInited)
+    {
+      xImgInited = true;
+    }
+
+    xTexDirty = true;
+
+    puts("Image load OK!\n");
 
     pthread_mutex_unlock(&xImgLock);
-    pthread_exit(NULL);
   }
 
-  xImgInited = true;
-  xTexDirty  = true;
-
-  puts("Image load OK!\n");
-
-  pthread_mutex_unlock(&xImgLock);
-
-  return NULL;
+  pthread_exit(NULL);
 }
 
 // ========================================================================
@@ -115,7 +147,7 @@ int main(int argc, char *argv[])
 
     ClearBackground(BLUE);
 
-    float drawScale = 10;
+    float drawScale = 20;
     float drawRot   = 0;
 
     if (xImgInited)

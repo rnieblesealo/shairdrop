@@ -67,6 +67,11 @@ critical:
 ---
 
 Network thread is crashing b/c it tries to update Raylib stuff, but has no notion 
+- Update: Fixed!
+
+---
+
+Want to keep client conn. alive so they may request to update the picture if they want
 
 ### Notes
 

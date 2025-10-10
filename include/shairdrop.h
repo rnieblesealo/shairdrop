@@ -77,6 +77,14 @@ bool SendImagePacket(const uint8_t *packet,
 int FireUpTheServer(const char *host, const char *port);
 
 /**
+ * @brief Establish connection to SHAirDrop server
+ * @param host Server hostname
+ * @param port Server port
+ * @returns The fd of the connection if successful, or -1 on error
+ */
+int ConnectToServer(const char *host, const char *port);
+
+/**
  * @brief Accepts a connection on the given listener file descriptor
  * @param sockfd The listener file descriptor
  * @returns The accepted connection's file descriptor, or -1 on error
@@ -84,11 +92,12 @@ int FireUpTheServer(const char *host, const char *port);
 int HearOutAMothafucka(int sockfd);
 
 /**
- * @brief Receives an image packet, writing it into a Raylib image if successful
+ * @brief Decodes an image packet into a Raylib Image
+ * @note Opcode should be decoded separately! This operation pertains to OPC_RECEIVE_IMG
  * @param img The image object we'd like to write our received image to
  * @param clientsockfd fd of the client we would like to receive image from
  * @returns true if the operation succeeded, false otherwise
  */
-bool GetHisFuckingPicture(Image *img, int clientsockfd);
+bool DecodeImagePacket(Image *img, int clientsockfd);
 
 #endif

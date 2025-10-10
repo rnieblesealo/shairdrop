@@ -7,45 +7,63 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX_IMG_PATH_LEN
+
 int main(int argc, char *argv[])
 {
-  if (argc < 4)
+  if (argc < 3)
   {
-    fputs("usage: ./shairc <img path> <host> <port>", stderr);
+    fputs("usage: ./shairc <host> <port>", stderr);
     exit(EXIT_FAILURE);
   }
 
-  const char *imgPath = argv[1];
-  const char *host    = argv[2];
-  const char *port    = argv[3];
+  const char *host = argv[1];
+  const char *port = argv[2];
 
-  // Load image
-  Image img = LoadImage(imgPath);
+  // Connect to server, begin loop
+  int sockfd;
+  if ((sockfd = ConnectToServer(host, port)) == -1)
+  {
+    fputs("client: failed to connect to server\n", stderr);
+    exit(EXIT_FAILURE);
+  }
 
-  // Convert the given image into 32-bit RGBA
-  // This guarantees that the receiver will have 4 channels
-  ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-
-  // Make packet
+  Image    img;
+  char     imgPath[MAX_IMG_PATH_LEN + 1];
   uint8_t *packetBuf;
   size_t   packetLen;
-  if (!AssembleImagePacket(&img, &packetBuf, &packetLen))
-  {
-    puts("client: failed to make packet");
-    exit(EXIT_FAILURE);
-  }
 
-  // Send it
-  if (SendImagePacket(packetBuf, packetLen, host, port))
+  bool connected = true;
+  while (connected)
   {
-    puts("Sent OK");
-  }
-  else
-  {
-    puts("Send FAIL");
-  }
+    // Ask for image path
+    scanf("%s", imgPath);
 
-  free(packetBuf);
+    // Load image at that path
+    img = LoadImage(imgPath);
+
+    // Convert the given image into 32-bit RGBA
+    // This guarantees that the receiver will have 4 channels
+    ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+
+    if (!AssembleImagePacket(&img, &packetBuf, &packetLen))
+    {
+      puts("client: failed to make packet\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // Now that we're connected, send the image; return the status of this
+    if (!SendAll(sockfd, (void *)packetBuf, packetLen))
+    {
+      fputs("client: failed to send out image\n", stderr);
+    }
+    else
+    {
+      fputs("client: image send OK\n", stderr);
+    }
+
+    free(packetBuf);
+  }
 
   exit(EXIT_SUCCESS);
 }
