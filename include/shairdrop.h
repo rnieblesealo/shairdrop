@@ -85,6 +85,7 @@ int HearOutAMothafucka(int sockfd);
 
 /**
  * @brief Receives an image packet, writing it into a Raylib image if successful
+ * @param img The image object we'd like to write our received image to
  * @param clientsockfd fd of the client we would like to receive image from
  * @returns true if the operation succeeded, false otherwise
  */

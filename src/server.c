@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "shairdrop.h"
 #include <netdb.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +9,47 @@
 
 #define SCREEN_WIDTH 500
 #define SCREEN_HEIGHT 500
+#define NUM_THREADS 1
+
+// === Shared State (Will make you cry) ============================
+
+Image           xImg            = {0};
+Texture2D       xImgTexture     = {0};
+bool            xImgInited      = false;
+bool            xTextureUpdated = false;
+pthread_mutex_t xImgLock        = PTHREAD_MUTEX_INITIALIZER;
+
+// =================================================================
+
+typedef struct NetArgs
+{
+  int servsockfd;
+} NetArgs;
+
+void *NetworkThread(void *arg)
+{
+  NetArgs *args = (NetArgs *)arg;
+
+  int clientsockfd = HearOutAMothafucka(args->servsockfd);
+
+  pthread_mutex_lock(&xImgLock);
+
+  if (!GetHisFuckingPicture(&xImg, clientsockfd))
+  {
+    fputs("server: unable to get picture\n", stderr);
+
+    pthread_mutex_unlock(&xImgLock);
+    pthread_exit(NULL);
+  }
+
+  xImgInited = true;
+
+  puts("Image load OK!\n");
+
+  pthread_mutex_unlock(&xImgLock);
+
+  return NULL;
+}
 
 int main(int argc, char *argv[])
 {
@@ -32,19 +74,25 @@ int main(int argc, char *argv[])
   const char *host = argv[1];
   const char *port = argv[2];
 
-  int sockfd       = FireUpTheServer(host, port);
-  int clientsockfd = HearOutAMothafucka(sockfd);
+  // Start server
+  int sockfd = FireUpTheServer(host, port);
 
-  Image img;
-  if (!GetHisFuckingPicture(&img, clientsockfd))
+  // ====================================================================================
+  // Network Thread
+  // ====================================================================================
+
+  pthread_t networkThread;
+  NetArgs   networkThreadArgs = {.servsockfd = sockfd};
+  int       rc;
+  if ((rc = pthread_create(&networkThread, NULL, NetworkThread, &networkThreadArgs)) != 0)
   {
-    fputs("server: unable to get picture\n", stderr);
+    fprintf(stderr, "server: pthread_create error, rc: %d\n", rc);
     exit(EXIT_FAILURE);
   }
 
-  Texture2D imgTex = LoadTextureFromImage(img);
-
-  puts("Image load OK!\n");
+  // ====================================================================================
+  // Render Thread
+  // ====================================================================================
 
   while (!WindowShouldClose())
   {
@@ -52,19 +100,39 @@ int main(int argc, char *argv[])
 
     ClearBackground(BLUE);
 
-    float   drawScale = 10;
-    float   drawRot   = 0;
-    Vector2 drawPos = {.x = (float)SCREEN_WIDTH / 2 - (float)imgTex.width * drawScale / 2,
-                       .y = (float)SCREEN_HEIGHT / 2 -
-                            (float)imgTex.height * drawScale / 2};
+    float drawScale = 10;
+    float drawRot   = 0;
 
-    DrawTextureEx(imgTex, drawPos, drawRot, drawScale, WHITE);
+    if (xImgInited)
+    {
+      pthread_mutex_lock(&xImgLock);
+
+      if (!xTextureUpdated)
+      {
+        xImgTexture     = LoadTextureFromImage(xImg);
+        xTextureUpdated = true;
+      }
+
+      Vector2 drawPos = {
+          .x = (float)SCREEN_WIDTH / 2 - (float)xImgTexture.width * drawScale / 2,
+          .y = (float)SCREEN_HEIGHT / 2 - (float)xImgTexture.height * drawScale / 2};
+
+      DrawTextureEx(xImgTexture, drawPos, drawRot, drawScale, WHITE);
+
+      pthread_mutex_unlock(&xImgLock);
+    }
 
     EndDrawing();
   }
 
-  UnloadTexture(imgTex);
-  UnloadImage(img);
+  // Dealloc stuff
+
+  pthread_mutex_lock(&xImgLock);
+
+  UnloadTexture(xImgTexture);
+  UnloadImage(xImg);
+
+  pthread_mutex_unlock(&xImgLock);
 
   CloseWindow();
 }

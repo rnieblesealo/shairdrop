@@ -47,6 +47,27 @@ For this we will need threading...
 
 ...Yay?
 
+- Set up server with window; they are coupled 
+- Handle receiving stuff separately (network thread)
+    - `sockfd` is created in main thread, not updated critically 
+    - `clientsockfd` is created in net thread, requires locking
+    - Image & image texture as well
+    - The image will be static; will use a flag that says whether it's inited
+
+```
+critical:
+    Image img;
+    Texture2D imageTexture;
+    int clientsockfd 
+    bool imgInited;
+```
+
+> Stretch: Make it so we can update the image at any time via another request; dirty mod
+
+---
+
+Network thread is crashing b/c it tries to update Raylib stuff, but has no notion 
+
 ### Notes
 
 - Using TCP INET4 for simplicity
@@ -57,9 +78,12 @@ For this we will need threading...
     - Since `uint8_t` is a single byte endianness (byte order) doesn't apply
     - Other types of int are simply not supported :(
 - Using any graphics functions in Raylib requires `InitWindow()` because this fires up the OGL context
+- Even though threads share process state, OpenGL restricts its use to the thread that started it
+> i.e., Treat OpenGL calls in a thread as if the thread was a fork 
 
 ### Code Style
 
 - PascalCase for functions and structs
 - camelCase for variable names
 - .clangd does everything else :)
+- Prepend all critical shared state with x; e.g. `imgTexture` would be `xImgTexture`
