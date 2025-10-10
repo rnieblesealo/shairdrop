@@ -1,3 +1,7 @@
+/**
+ * @brief Headers related to network helpers
+ */
+
 #ifndef SEND_HELP_H
 #define SEND_HELP_H
 

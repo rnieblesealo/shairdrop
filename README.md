@@ -37,6 +37,16 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
  6. Server displays image
    - We never save it to filesystem though
 
+#### New Task: Threading!
+
+Right now the draw loop only begins once we've got an image
+
+I want to always draw and only display the image once we receive it though!
+
+For this we will need threading...
+
+...Yay?
+
 ### Notes
 
 - Using TCP INET4 for simplicity

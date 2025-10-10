@@ -1,4 +1,5 @@
 # Adapted from Niko
+# TODO: Make sure this isn't horrible :)
 
 cmake_minimum_required(VERSION 3.10)
 
@@ -11,11 +12,13 @@ find_package(raylib REQUIRED)
 
 add_executable(shairc 
   src/client.c
+  src/shairdrop.c
 )
 
 add_executable(shairs
-  src/sendhelp.c
   src/server.c
+  src/sendhelp.c
+  src/shairdrop.c
 )
 
 if(APPLE)
