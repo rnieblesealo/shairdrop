@@ -101,6 +101,7 @@ Want to keep client conn. alive so they may request to update the picture if the
 ### Logging
 
 - Manual ANSI + macros, everything that we can use is too complex or requires C++
+> Why macros? Because they are cool as fuck
 - Only the main portion should log assertion messages; to handle specific logging for errors we'd like to see, each function that may return different codes will have an error code enum for itself
     - We will interpret this error code in the main server/client code and print the necessary error information
     - This keeps logging clean and in one place while still allowing for comprehensive error interpreting :) 
