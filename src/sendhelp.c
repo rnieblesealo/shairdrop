@@ -45,8 +45,6 @@ bool SendAll(int fd, void *buf, size_t len)
     bytesSent += (ssize_t)n;
   }
 
-  printf("Sent %zu bytes, OK\n ", bytesSent);
-
   return true;
 }
 
@@ -80,8 +78,6 @@ bool ReceiveAll(int fd, void *buf, size_t len)
 
     bytesReceived += (size_t)n;
   }
-
-  printf("Received %zu bytes, OK\n ", bytesReceived);
 
   return true;
 }

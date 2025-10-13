@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-bool AssembleImagePacket(Image *image, uint8_t **packetBuf, size_t *packetLen)
+enum SHAIRRC AssembleImagePacket(Image *image, uint8_t **packetBuf, size_t *packetLen)
 {
   /*
    * ┌──────────────────────────────┐
@@ -32,8 +32,7 @@ bool AssembleImagePacket(Image *image, uint8_t **packetBuf, size_t *packetLen)
 
   if (imgSize > MAX_IMG_SIZE)
   {
-    fputs("client: image too large\n", stderr);
-    return false;
+    return RC_IMG_TOO_LARGE_ERROR;
   }
 
   size_t totalPacketSize =
@@ -73,13 +72,13 @@ bool AssembleImagePacket(Image *image, uint8_t **packetBuf, size_t *packetLen)
   // Update size
   *packetLen = totalPacketSize;
 
-  return true;
+  return RC_SUCCESS;
 }
 
-bool SendImagePacket(const uint8_t *packet,
-                     size_t         packetLen,
-                     const char    *host,
-                     const char    *port)
+enum SHAIRRC SendImagePacket(const uint8_t *packet,
+                             size_t         packetLen,
+                             const char    *host,
+                             const char    *port)
 {
   // Resolve host
   struct addrinfo hints;
@@ -90,11 +89,9 @@ bool SendImagePacket(const uint8_t *packet,
   hints.ai_socktype = SOCK_STREAM;
 
   struct addrinfo *res;
-  int              rc;
-  if ((rc = getaddrinfo(host, port, &hints, &res)) != 0)
+  if (getaddrinfo(host, port, &hints, &res) != 0)
   {
-    fprintf(stderr, "client: getaddrinfo: %s\n", gai_strerror(rc));
-    return false;
+    return RC_GAI_ERROR;
   }
 
   // Bind to first available
@@ -105,7 +102,6 @@ bool SendImagePacket(const uint8_t *packet,
     // Open socket
     if ((sockfd = socket(curr->ai_family, curr->ai_socktype, curr->ai_protocol)) == -1)
     {
-      perror("client: socket");
       continue;
     }
 
@@ -113,11 +109,9 @@ bool SendImagePacket(const uint8_t *packet,
     int yes = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
     {
-      perror("setsockopt (DEADLY FAIL)");
-
       freeaddrinfo(res);
 
-      return false;
+      return RC_SOCKET_ERROR;
     }
 
     // No bind since this isn't a server; our identity is not relevant (right now!)
@@ -125,10 +119,9 @@ bool SendImagePacket(const uint8_t *packet,
     // Connect!
     if (connect(sockfd, curr->ai_addr, curr->ai_addrlen) == -1)
     {
-      perror("client: connect");
+      freeaddrinfo(res);
 
-      // TODO: We could probably retry a failed connection, but it's ok
-      return false;
+      return RC_CONNECTION_ERROR;
     }
 
     break;
@@ -136,8 +129,64 @@ bool SendImagePacket(const uint8_t *packet,
 
   freeaddrinfo(res);
 
-  // Now that we're connected, send the image; return the status of this
-  return SendAll(sockfd, (void *)packet, packetLen);
+  bool did_send = SendAll(sockfd, (void *)packet, packetLen);
+  if (did_send)
+  {
+    return RC_SUCCESS;
+  }
+
+  return RC_SEND_ERROR;
+}
+
+enum SHAIRRC DecodeImagePacket(Image *img, int clientsockfd)
+{
+  uint16_t packetSize;
+  if (!ReceiveAll(clientsockfd, &packetSize, sizeof packetSize))
+  {
+    return RC_BAD_PACKET_SIZE_ERROR;
+  }
+
+  packetSize = ntohs(packetSize);
+
+  // Get the packet itself
+
+  uint8_t *recvdPacket = (uint8_t *)malloc(packetSize);
+
+  if (!ReceiveAll(clientsockfd, recvdPacket, packetSize))
+  {
+    return RC_RECEIVE_ERROR;
+  }
+
+  // Get image attributes
+
+  size_t offset = 0;
+
+  uint8_t w = recvdPacket[offset];
+  offset += sizeof w;
+
+  uint8_t h = recvdPacket[offset];
+  offset += sizeof h;
+
+  uint8_t ch = recvdPacket[offset];
+  offset += sizeof ch;
+
+  size_t imgSize = w * h * ch;
+
+  // Get image data and write it back
+
+  memset(img, 0, sizeof(Image));
+
+  img->width   = w;
+  img->height  = h;
+  img->mipmaps = 1;
+  img->format  = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+
+  img->data = malloc(imgSize);
+  memcpy(img->data, &recvdPacket[offset], imgSize);
+
+  free(recvdPacket);
+
+  return RC_SUCCESS;
 }
 
 int FireUpTheServer(const char *host, const char *port)
@@ -198,9 +247,6 @@ int FireUpTheServer(const char *host, const char *port)
 
     break;
   }
-
-  // Get here if server OK
-  printf("Listening on %s:%s...\n", host, port);
 
   freeaddrinfo(res);
 
@@ -283,63 +329,4 @@ int HearOutAMothafucka(int sockfd)
   }
 
   return clientsockfd;
-}
-
-bool DecodeImagePacket(Image *img, int clientsockfd)
-{
-  uint16_t packetSize;
-  if (!ReceiveAll(clientsockfd, &packetSize, sizeof packetSize))
-  {
-    fputs("server: failed to receive packet size\n", stderr);
-    return false;
-  }
-
-  packetSize = ntohs(packetSize);
-
-  printf("server: got packet size %u\n", packetSize);
-
-  // Get the packet itself
-
-  uint8_t *recvdPacket = (uint8_t *)malloc(packetSize);
-
-  if (!ReceiveAll(clientsockfd, recvdPacket, packetSize))
-  {
-    fputs("server: failed to receive packet", stderr);
-    exit(EXIT_FAILURE);
-  }
-
-  printf("server: got full packet of size %u\n", packetSize);
-
-  // Get image attributes
-
-  size_t offset = 0;
-
-  uint8_t w = recvdPacket[offset];
-  offset += sizeof w;
-
-  uint8_t h = recvdPacket[offset];
-  offset += sizeof h;
-
-  uint8_t ch = recvdPacket[offset];
-  offset += sizeof ch;
-
-  size_t imgSize = w * h * ch;
-
-  printf("server: got image of size %u * %u * %u = %zu\n", w, h, ch, imgSize);
-
-  // Get image data and write it back
-
-  memset(img, 0, sizeof(Image));
-
-  img->width   = w;
-  img->height  = h;
-  img->mipmaps = 1;
-  img->format  = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
-
-  img->data = malloc(imgSize);
-  memcpy(img->data, &recvdPacket[offset], imgSize);
-
-  free(recvdPacket);
-
-  return true;
 }

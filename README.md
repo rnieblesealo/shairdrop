@@ -8,6 +8,16 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
 
 ## VERY GOOD DESIGN DOCUMENT
 
+### Todo
+
+- [ ] Entire server dies with net thread upon it being closed
+> Or allow reconnections if you are feeling bold :)
+- [ ] Client know when server died
+> Better connection handling in general :)
+- [ ] Investigate why passing a random file sends a packet
+    - I suppose we're just memcpying garbage, nothing egregious, we just need to logically define that that memory isn't allowed right now
+    - ...Which we are doing!
+
 ### Avatar Packet
 
 - Width - 1 byte; 8 bits (max. 2^8 - 1 size; 255); boundscheck this!
@@ -92,3 +102,18 @@ Want to keep client conn. alive so they may request to update the picture if the
 - camelCase for variable names
 - .clangd does everything else :)
 - Prepend all critical shared state with x; e.g. `imgTexture` would be `xImgTexture`
+
+### Logging
+
+- Manual ANSI + macros, everything that we can use is too complex or requires C++
+> Why macros? Because they are cool as fuck
+- Only the main portion should log assertion messages; to handle specific logging for errors we'd like to see, each function that may return different codes will have an error code enum for itself
+    - We will interpret this error code in the main server/client code and print the necessary error information
+    - This keeps logging clean and in one place while still allowing for comprehensive error interpreting :) 
+    > On second thought since each function has sparse places where it can fail, we will use a central enum that encodes all status codes that can occur within the protocol's functions
+- Some functions return things like file descriptors; to make them fit the error code pattern we'd have to make them write the value using a *ptr
+    - This is messy
+    - Returning fd is easier, briefer
+        - To keep things consistent, the function that wraps whatever returns a fd should ALWAYS give back an rc to the server
+        - If the server calls the thing directly, it'll know what to log from its level anyway, so it's ok
+        > This makes things a bit inconsistent ngl I will revise later :/ 
