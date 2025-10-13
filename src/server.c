@@ -22,7 +22,9 @@
 #define SERVER_ERROR(error_msg)                                                          \
   fputs(ANSI_RED "[SERVER ERROR] " ANSI_RESET error_msg "\n", stderr);
 #define SERVER_ERRORF(error_msg, ...)                                                    \
-  fprintf(stderr, ANSI_RED error_msg ANSI_RESET "\n", __VA_ARGS__);
+  fprintf(stderr,                                                                        \
+          ANSI_RED "[SERVER ERROR]" ANSI_RESET error_msg "\n",                  \
+          __VA_ARGS__);
 
 // ========================================================================
 // Shared State (Will make you cry) (Update: It didn't because I'm him >:D)

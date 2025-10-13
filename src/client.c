@@ -20,7 +20,7 @@
 #define CLIENT_ERROR(error_msg)                                                          \
   fputs(ANSI_RED "[CLIENT ERROR] " ANSI_RESET error_msg "\n", stderr);
 #define CLIENT_ERRORF(error_msg, ...)                                                    \
-  fprintf(stderr, ANSI_RED error_msg ANSI_RESET "\n", __VA_ARGS__);
+  fprintf(stderr, ANSI_RED "[CLIENT ERROR] " ANSI_RESET error_msg "\n", __VA_ARGS__);
 
 int main(int argc, char *argv[])
 {
@@ -56,8 +56,17 @@ int main(int argc, char *argv[])
     CLIENT_MESSAGE("Please enter an image filepath...")
     scanf("%s", imgPath);
 
-    // Load image at that path
+    // Load image at that path, verifying it exists
+    // Raylib image's data will be NULL if it failed to load
+
+    memset(&img, 0, sizeof img); // Need to ensure is clean!
+
     img = LoadImage(imgPath);
+    if (img.data == NULL)
+    {
+      CLIENT_ERRORF("Image %s does not exist, aborting...", imgPath);
+      exit(EXIT_FAILURE);
+    }
 
     // Convert the given image into 32-bit RGBA
     // This guarantees that the receiver will have 4 channels

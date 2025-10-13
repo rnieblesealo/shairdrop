@@ -12,6 +12,8 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
 
 - [ ] Entire server dies with net thread upon it being closed
 > Or allow reconnections if you are feeling bold :)
+- [ ] Client know when server died
+> Better connection handling in general :)
 
 ### Avatar Packet
 
