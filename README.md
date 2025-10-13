@@ -14,6 +14,9 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
 > Or allow reconnections if you are feeling bold :)
 - [ ] Client know when server died
 > Better connection handling in general :)
+- [ ] Investigate why passing a random file sends a packet
+    - I suppose we're just memcpying garbage, nothing egregious, we just need to logically define that that memory isn't allowed right now
+    - ...Which we are doing!
 
 ### Avatar Packet
 
