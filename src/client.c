@@ -1,3 +1,4 @@
+#include "ansihelp.h"
 #include "raylib.h"
 #include "sendhelp.c"
 #include "shairdrop.h"
@@ -7,7 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_IMG_PATH_LEN
+#define MAX_IMG_PATH_LEN 128
+
+// Message & error macros
+// No need to worry about newlines!
+#define CLIENT_MESSAGE(message) puts(ANSI_GREEN "[CLIENT] " ANSI_RESET message);
+#define CLIENT_MESSAGEF(message, ...)                                                    \
+  printf(ANSI_GREEN "[CLIENT] " ANSI_RESET message "\n", __VA_ARGS__);
+#define CLIENT_WARNING(warning_msg)                                                      \
+  puts(ANSI_YELLOW "[CLIENT WARNING] " ANSI_RESET warning_msg);
+#define CLIENT_ERROR(error_msg)                                                          \
+  fputs(ANSI_RED "[CLIENT ERROR] " ANSI_RESET error_msg "\n", stderr);
+#define CLIENT_ERRORF(error_msg, ...)                                                    \
+  fprintf(stderr, ANSI_RED error_msg ANSI_RESET "\n", __VA_ARGS__);
 
 int main(int argc, char *argv[])
 {
@@ -17,6 +30,9 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
 
+  // Disable raylib logging in favor of our own
+  SetTraceLogLevel(LOG_NONE);
+
   const char *host = argv[1];
   const char *port = argv[2];
 
@@ -24,7 +40,7 @@ int main(int argc, char *argv[])
   int sockfd;
   if ((sockfd = ConnectToServer(host, port)) == -1)
   {
-    fputs("client: failed to connect to server\n", stderr);
+    CLIENT_ERRORF("Failed to connect to %s:%s...", host, port);
     exit(EXIT_FAILURE);
   }
 
@@ -37,6 +53,7 @@ int main(int argc, char *argv[])
   while (connected)
   {
     // Ask for image path
+    CLIENT_MESSAGE("Please enter an image filepath...")
     scanf("%s", imgPath);
 
     // Load image at that path
@@ -48,18 +65,18 @@ int main(int argc, char *argv[])
 
     if (AssembleImagePacket(&img, &packetBuf, &packetLen) != RC_SUCCESS)
     {
-      puts("client: failed to make packet\n");
+      CLIENT_ERROR("Failed to assemble image packet");
       exit(EXIT_FAILURE);
     }
 
     // Now that we're connected, send the image; return the status of this
     if (!SendAll(sockfd, (void *)packetBuf, packetLen))
     {
-      fputs("client: failed to send out image\n", stderr);
+      CLIENT_ERROR("Failed to send image packet");
     }
     else
     {
-      fputs("client: image send OK\n", stderr);
+      CLIENT_MESSAGE("Image packet send OK");
     }
 
     free(packetBuf);

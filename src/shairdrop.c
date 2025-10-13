@@ -248,9 +248,6 @@ int FireUpTheServer(const char *host, const char *port)
     break;
   }
 
-  // Get here if server OK
-  printf("Listening on %s:%s...\n", host, port);
-
   freeaddrinfo(res);
 
   return sockfd;

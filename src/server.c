@@ -15,12 +15,14 @@
 // Message & error macros
 // No need to worry about newlines!
 #define SERVER_MESSAGE(message) puts(ANSI_GREEN "[SERVER] " ANSI_RESET message);
+#define SERVER_MESSAGEF(message, ...)                                                    \
+  printf(ANSI_GREEN "[SERVER] " ANSI_RESET message "\n", __VA_ARGS__);
 #define SERVER_WARNING(warning_msg)                                                      \
   puts(ANSI_YELLOW "[SERVER WARNING] " ANSI_RESET warning_msg);
 #define SERVER_ERROR(error_msg)                                                          \
   fputs(ANSI_RED "[SERVER ERROR] " ANSI_RESET error_msg "\n", stderr);
-#define SERVER_ERRORF(error_msg, format)                                                 \
-  fprintf(stderr, ANSI_RED error_msg ANSI_RESET "\n", format);
+#define SERVER_ERRORF(error_msg, ...)                                                    \
+  fprintf(stderr, ANSI_RED error_msg ANSI_RESET "\n", __VA_ARGS__);
 
 // ========================================================================
 // Shared State (Will make you cry) (Update: It didn't because I'm him >:D)
@@ -65,8 +67,6 @@ void *NetworkThread(void *arg)
       SERVER_WARNING("Net thread received invalid packet, terminating it...");
       pthread_exit(NULL);
     }
-
-    printf("server: got opcode %u\n", opcode);
 
     if (opcode != OPC_RECEIVE_IMG)
     {
@@ -124,11 +124,19 @@ int main(int argc, char *argv[])
 
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "SHAirDrop");
   SetTargetFPS(60);
+  SetTraceLogLevel(LOG_NONE); // Disable raylib logging in favor of our own
 
   const char *host = argv[1];
   const char *port = argv[2];
 
-  int sockfd = FireUpTheServer(host, port);
+  int sockfd;
+  if ((sockfd = FireUpTheServer(host, port)) == -1)
+  {
+    SERVER_ERROR("Failed to start server");
+    exit(EXIT_FAILURE);
+  }
+
+  SERVER_MESSAGEF("Listening on %s:%s...", host, port);
 
   // ====================================================================================
   // Network Thread Start

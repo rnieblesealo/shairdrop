@@ -8,6 +8,11 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
 
 ## VERY GOOD DESIGN DOCUMENT
 
+### Todo
+
+- [ ] Entire server dies with net thread upon it being closed
+> Or allow reconnections if you are feeling bold :)
+
 ### Avatar Packet
 
 - Width - 1 byte; 8 bits (max. 2^8 - 1 size; 255); boundscheck this!
