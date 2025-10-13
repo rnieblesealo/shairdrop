@@ -1,3 +1,4 @@
+#include "ansihelp.h"
 #include "raylib.h"
 #include "sendhelp.h"
 #include "shairdrop.h"
@@ -10,6 +11,16 @@
 
 #define SCREEN_WIDTH 500
 #define SCREEN_HEIGHT 500
+
+// Message & error macros
+// No need to worry about newlines!
+#define SERVER_MESSAGE(message) puts(ANSI_GREEN "[SERVER] " ANSI_RESET message);
+#define SERVER_WARNING(warning_msg)                                                      \
+  puts(ANSI_YELLOW "[SERVER WARNING] " ANSI_RESET warning_msg);
+#define SERVER_ERROR(error_msg)                                                          \
+  fputs(ANSI_RED "[SERVER ERROR] " ANSI_RESET error_msg "\n", stderr);
+#define SERVER_ERRORF(error_msg, format)                                                 \
+  fprintf(stderr, ANSI_RED error_msg ANSI_RESET "\n", format);
 
 // ========================================================================
 // Shared State (Will make you cry) (Update: It didn't because I'm him >:D)
@@ -43,8 +54,7 @@ void *NetworkThread(void *arg)
 
   while (connected)
   {
-
-    puts("server: waiting for new picture...\n");
+    SERVER_MESSAGE("Waiting for image...");
 
     // Get the opcode
     // If it pertains to image reception, then do that
@@ -52,8 +62,7 @@ void *NetworkThread(void *arg)
     uint8_t opcode;
     if (!ReceiveAll(clientsockfd, &opcode, sizeof opcode))
     {
-      fputs("server: net thread recv fail; stopping\n", stderr);
-
+      SERVER_WARNING("Net thread received invalid packet, terminating it...");
       pthread_exit(NULL);
     }
 
@@ -61,17 +70,15 @@ void *NetworkThread(void *arg)
 
     if (opcode != OPC_RECEIVE_IMG)
     {
-      fprintf(stderr, "server: bad opcode (%d)", opcode);
-
+      SERVER_ERRORF("Bad opcode (%d)", opcode);
       continue;
     }
 
     pthread_mutex_lock(&xImgLock);
 
-    if (!DecodeImagePacket(&xImg, clientsockfd))
+    if (DecodeImagePacket(&xImg, clientsockfd) != RC_SUCCESS)
     {
-      fputs("server: unable to get picture\n", stderr);
-
+      SERVER_ERROR("Unable to decode image packet, terminating network thread...")
       pthread_mutex_unlock(&xImgLock);
       pthread_exit(NULL);
     }
@@ -83,8 +90,7 @@ void *NetworkThread(void *arg)
 
     xTexDirty = true;
 
-    puts("Image load OK!\n");
-
+    SERVER_MESSAGE("Image load successful!");
     pthread_mutex_unlock(&xImgLock);
   }
 
@@ -133,7 +139,7 @@ int main(int argc, char *argv[])
   int       rc;
   if ((rc = pthread_create(&networkThread, NULL, NetworkThread, &networkThreadArgs)) != 0)
   {
-    fprintf(stderr, "server: pthread_create error, rc: %d\n", rc);
+    SERVER_ERROR("Failed to create network thread, (RC %d); exiting...");
     exit(EXIT_FAILURE);
   }
 

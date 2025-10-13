@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
     // This guarantees that the receiver will have 4 channels
     ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
 
-    if (!AssembleImagePacket(&img, &packetBuf, &packetLen))
+    if (AssembleImagePacket(&img, &packetBuf, &packetLen) != RC_SUCCESS)
     {
       puts("client: failed to make packet\n");
       exit(EXIT_FAILURE);
