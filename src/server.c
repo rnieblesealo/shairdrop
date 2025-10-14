@@ -11,6 +11,7 @@
 
 #define SCREEN_WIDTH 500
 #define SCREEN_HEIGHT 500
+#define MAX_CLIENT_CONNS 2
 
 // Message & error macros
 // No need to worry about newlines!
@@ -22,51 +23,62 @@
 #define SERVER_ERROR(error_msg)                                                          \
   fputs(ANSI_RED "[SERVER ERROR] " ANSI_RESET error_msg "\n", stderr);
 #define SERVER_ERRORF(error_msg, ...)                                                    \
-  fprintf(stderr,                                                                        \
-          ANSI_RED "[SERVER ERROR]" ANSI_RESET error_msg "\n",                  \
-          __VA_ARGS__);
+  fprintf(stderr, ANSI_RED "[SERVER ERROR]" ANSI_RESET error_msg "\n", __VA_ARGS__);
 
 // ========================================================================
-// Shared State (Will make you cry) (Update: It didn't because I'm him >:D)
+// Structures
+// ========================================================================
+
+typedef struct NetworkThreadArgs
+{
+  int servsockfd;
+} NetworkThreadArgs;
+
+typedef struct ClientThreadArgs
+{
+  int clientsockfd;
+} ClientThreadArgs;
+
+typedef struct ClientThreadState
+{
+  bool connected;
+} ClientThreadState;
+
+// ========================================================================
+// Shared State
 // ========================================================================
 
 Image           xImg        = {0};
 Texture2D       xImgTexture = {0};
 bool            xImgInited  = false;
 bool            xTexDirty   = false;
-pthread_mutex_t xImgLock    = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t xLock       = PTHREAD_MUTEX_INITIALIZER;
 
-// ========================================================================
-// Structures
-// ========================================================================
-
-typedef struct NetArgs
-{
-  int servsockfd;
-} NetArgs;
+// Thread data
+pthread_t         xClientThreads[MAX_CLIENT_CONNS];
+ClientThreadState xClientThreadState[MAX_CLIENT_CONNS];
+uint32_t          xClientThreadsTail = 0;
 
 // ========================================================================
 // Function Definitions
 // ========================================================================
 
-void *NetworkThread(void *arg)
+void *ClientThread(void *arg)
 {
-  NetArgs *args = (NetArgs *)arg;
+  ClientThreadArgs *args = (ClientThreadArgs *)arg;
 
-  int clientsockfd = HearOutAMothafucka(args->servsockfd);
-  int connected    = true;
-
+  bool connected = true;
   while (connected)
   {
-    SERVER_MESSAGE("Waiting for image...");
+    SERVER_MESSAGE("Client thread waiting for image...");
 
     // Get the opcode
     // If it pertains to image reception, then do that
 
     uint8_t opcode;
-    if (!ReceiveAll(clientsockfd, &opcode, sizeof opcode))
+    if (!ReceiveAll(args->clientsockfd, &opcode, sizeof opcode))
     {
-      SERVER_WARNING("Net thread received invalid packet, terminating it...");
+      SERVER_WARNING("Client thread received invalid packet, terminating it...");
       pthread_exit(NULL);
     }
 
@@ -76,12 +88,12 @@ void *NetworkThread(void *arg)
       continue;
     }
 
-    pthread_mutex_lock(&xImgLock);
+    pthread_mutex_lock(&xLock);
 
-    if (DecodeImagePacket(&xImg, clientsockfd) != RC_SUCCESS)
+    if (DecodeImagePacket(&xImg, args->clientsockfd) != RC_SUCCESS)
     {
-      SERVER_ERROR("Unable to decode image packet, terminating network thread...")
-      pthread_mutex_unlock(&xImgLock);
+      SERVER_ERROR("Unable to decode image packet, terminating client thread...")
+      pthread_mutex_unlock(&xLock);
       pthread_exit(NULL);
     }
 
@@ -92,8 +104,51 @@ void *NetworkThread(void *arg)
 
     xTexDirty = true;
 
-    SERVER_MESSAGE("Image load successful!");
-    pthread_mutex_unlock(&xImgLock);
+    SERVER_MESSAGE("Client thread image load successful!");
+    pthread_mutex_unlock(&xLock);
+  }
+
+  pthread_exit(NULL);
+}
+
+void *NetworkThread(void *arg)
+{
+  NetworkThreadArgs *args = (NetworkThreadArgs *)arg;
+
+  bool connected = true;
+  while (connected)
+  {
+    // Listen for new connections
+
+    int connsockfd;
+    if ((connsockfd = HearOutAMothafucka(args->servsockfd)) == -1)
+    {
+      SERVER_ERROR("Received a connection, but failed to accept");
+      continue;
+    }
+
+    pthread_mutex_lock(&xLock);
+
+    // Upon receiving one, create a thread for it alongside its state
+
+    ClientThreadArgs cThreadArgs = {.clientsockfd = connsockfd};
+
+    int rc;
+    if ((rc = pthread_create(
+             &xClientThreads[xClientThreadsTail], NULL, ClientThread, &cThreadArgs)) != 0)
+    {
+      SERVER_ERRORF("Failed to create thread for connection socket %d", connsockfd);
+      pthread_mutex_unlock(&xLock);
+      continue;
+    }
+
+    xClientThreadState[xClientThreadsTail].connected = true;
+
+    xClientThreadsTail++;
+
+    SERVER_MESSAGEF("Created thread for socket %d", connsockfd);
+
+    pthread_mutex_unlock(&xLock);
   }
 
   pthread_exit(NULL);
@@ -131,6 +186,9 @@ int main(int argc, char *argv[])
   const char *host = argv[1];
   const char *port = argv[2];
 
+  // Clean up thread data
+  memset(&xClientThreads, 0, sizeof xClientThreads);
+
   int sockfd;
   if ((sockfd = FireUpTheServer(host, port)) == -1)
   {
@@ -144,9 +202,9 @@ int main(int argc, char *argv[])
   // Network Thread Start
   // ====================================================================================
 
-  pthread_t networkThread;
-  NetArgs   networkThreadArgs = {.servsockfd = sockfd};
-  int       rc;
+  pthread_t         networkThread;
+  NetworkThreadArgs networkThreadArgs = {.servsockfd = sockfd};
+  int               rc;
   if ((rc = pthread_create(&networkThread, NULL, NetworkThread, &networkThreadArgs)) != 0)
   {
     SERVER_ERROR("Failed to create network thread, (RC %d); exiting...");
@@ -168,7 +226,7 @@ int main(int argc, char *argv[])
 
     if (xImgInited)
     {
-      pthread_mutex_lock(&xImgLock);
+      pthread_mutex_lock(&xLock);
 
       if (xTexDirty)
       {
@@ -182,7 +240,7 @@ int main(int argc, char *argv[])
 
       DrawTextureEx(xImgTexture, drawPos, drawRot, drawScale, WHITE);
 
-      pthread_mutex_unlock(&xImgLock);
+      pthread_mutex_unlock(&xLock);
     }
 
     EndDrawing();
@@ -192,12 +250,12 @@ int main(int argc, char *argv[])
   // Deinitialization
   // ====================================================================================
 
-  pthread_mutex_lock(&xImgLock);
+  pthread_mutex_lock(&xLock);
 
   UnloadTexture(xImgTexture);
   UnloadImage(xImg);
 
-  pthread_mutex_unlock(&xImgLock);
+  pthread_mutex_unlock(&xLock);
 
   CloseWindow();
 }

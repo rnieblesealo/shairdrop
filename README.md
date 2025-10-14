@@ -11,6 +11,8 @@ It's like AirDrop, except you can only share small images, it's written in C, ne
 ### Todo
 
 - [ ] Entire server dies with net thread upon it being closed
+    - Net thread sends end sig to parent
+    - Parent terminates it and itself
 > Or allow reconnections if you are feeling bold :)
 - [ ] Client know when server died
 > Better connection handling in general :)
